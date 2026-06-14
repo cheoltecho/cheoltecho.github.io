@@ -29,4 +29,6 @@ Java · Spring Boot · Go · Linux · QEMU/KVM · libvirt · Ceph · Terraform
 - GitHub — [cheolsoonP](https://github.com/cheolsoonP)
 - LinkedIn — [cheolsoon-park](https://www.linkedin.com/in/cheolsoon-park-04935b228/)
 
+📚 2023년 이전 글은 [Tistory 블로그](https://cheoltecho.tistory.com)에 있습니다.
+
 > _A backend engineer building the core engine of a private-cloud (IaaS) product on QEMU/KVM._
