@@ -35,11 +35,11 @@ target 네트워크 설정 → source 정리. 각 단계는 실패할 수 있고
 
 동작은 시작일 뿐이었다. 운영에서 부딪힌 문제들을 하나씩 막았다.
 
-### 1. 네트워크 다운타임 ~20s → 1~2s
+### 1. 네트워크 다운타임 약 20s → 1–2s
 
 마이그레이션 직후 VM 네트워크가 약 20초 끊겼다. 원인은 cutover 이후 직렬로 실행되던 방화벽 체인 생성.
-그 idempotent한 작업을 마이그레이션 시작 _전_으로 옮기는 것만으로 1~2초로 줄였다.
-→ **[다운타임을 1~2초로 줄인 과정](/posts/live-migration-downtime/)** (deep-dive)
+그 idempotent한 작업을 마이그레이션 시작 _전_으로 옮기는 것만으로 1–2초로 줄였다.
+→ **[다운타임을 1–2초로 줄인 과정](/posts/live-migration-downtime/)** (deep-dive)
 
 ### 2. CPU 이기종 호환성 — 런타임 실패를 사전 차단
 
@@ -79,6 +79,6 @@ deadlock이 났다 → **락 획득 순서를 항상 고정(ID 오름차순)**�
 ## 시리즈
 
 - (이 글) 전체 개요 — 0→1 구현과 하드닝
-- [네트워크 다운타임 ~20s → 1~2s](/posts/live-migration-downtime/)
+- [네트워크 다운타임 약 20s → 1–2s](/posts/live-migration-downtime/)
 - CPU 이기종 호환성 — _작성 예정_
 - 동시성·deadlock — _작성 예정_
