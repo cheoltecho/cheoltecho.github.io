@@ -1,5 +1,5 @@
 ---
-author: Park Cheolsoon
+author: Soon
 pubDatetime: 2026-06-14T00:00:00+09:00
 title: 라이브 마이그레이션인데 네트워크가 20초 끊긴다면 — 다운타임을 1~2초로 줄인 과정
 featured: true

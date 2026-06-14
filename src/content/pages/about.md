@@ -1,9 +1,9 @@
 ---
 title: About
-description: 박철순(soon) — 가상화·인프라 백엔드 엔지니어
+description: Soon — 가상화·인프라 백엔드 엔지니어
 ---
 
-안녕하세요, **박철순 (Park Cheolsoon)** 입니다. 👋
+안녕하세요, **Soon** 입니다. 👋
 
 프라이빗 클라우드(IaaS) 제품의 **VM 관리 코어 엔진**을 만드는 백엔드 엔지니어입니다.
 현재 **iAcloud(주식회사 아이에이클라우드)** 에서 [CloudiA](https://ia-cloud.gitbook.io/cloudia-manual) —

@@ -5,8 +5,8 @@ export default defineAstroPaperConfig({
     url: "https://cheoltecho.github.io/",
     title: "철테코",
     description:
-      "soon(박철순)의 기술 블로그 — 가상화·인프라·백엔드. QEMU/KVM 기반 프라이빗 클라우드를 만들며 배운 것들.",
-    author: "Park Cheolsoon",
+      "Soon의 기술 블로그 — 가상화·인프라·백엔드. QEMU/KVM 기반 프라이빗 클라우드를 만들며 배운 것들.",
+    author: "Soon",
     profile: "https://github.com/cheolsoonP",
     ogImage: "default-og.jpg",
     lang: "en",
