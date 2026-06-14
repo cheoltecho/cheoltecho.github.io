@@ -1,0 +1,97 @@
+---
+author: Park Cheolsoon
+pubDatetime: 2026-06-14T00:00:00+09:00
+title: 라이브 마이그레이션인데 네트워크가 20초 끊긴다면 — 다운타임을 1~2초로 줄인 과정
+featured: true
+tags:
+  - virtualization
+  - kvm
+  - performance
+description: KVM/libvirt 라이브 마이그레이션에서 cutover 이후 방화벽 체인 생성이 만든 ~20초 네트워크 다운타임을, idempotent 작업을 critical path 밖으로 빼는 것만으로 1~2초로 줄인 과정.
+---
+
+프라이빗 클라우드 IaaS 제품 **[CloudiA](https://ia-cloud.gitbook.io/cloudia-manual)** 백엔드를 개발하면서
+VM **라이브 마이그레이션**을 다뤘다. "라이브"의 핵심은 사용자가 눈치채지 못하게 실행 중인 VM을
+다른 호스트로 옮기는 것이다. 그런데 초기 구현에서 마이그레이션 직후 VM 내부 네트워크가 **약 20초** 끊겼다.
+
+20초면 SSH 세션이 끊기고, Kubernetes healthcheck처럼 짧은 타이머에 의존하는 서비스는
+연결이 죽었다고 판단해 강제 재시작한다. 라이브 마이그레이션의 존재 의의("다운타임 없는 이동")가
+사실상 무의미해지는 수준이다.
+
+이 글은 그 20초가 **어디서 왔고**, 어떻게 **1~2초**로 줄였는지에 대한 기록이다.
+특정 제품 코드가 아니라 KVM/libvirt 기반 가상화에서 일반적으로 통하는 교훈 위주로 적는다.
+
+## 라이브 마이그레이션은 어디서 네트워크를 끊는가
+
+libvirt의 P2P 라이브 마이그레이션은 내부적으로 QEMU가 메모리 페이지를 반복 전송(iterative copy)하다가,
+남은 dirty page가 충분히 작아지면 source를 멈추고 target에서 VM을 깨우는 **cutover**로 끝난다.
+cutover 자체는 보통 수십~수백 ms다.
+
+문제는 cutover **이후**다. target 호스트에서 VM의 네트워크를 실제로 살리려면 후처리가 남아 있다:
+
+1. VM의 가상 NIC에 대응하는 **TAP 인터페이스**가 등장했는지 확인
+2. **방화벽(Security Group) 체인** — iptables chain을 생성하고 점프 규칙을 연결
+
+이 후처리가 cutover 이후에 **직렬로** 실행되면, 그 시간 동안 target VM의 패킷은
+갈 곳이 없어 drop된다. 바로 이 구간이 사용자가 체감하는 "네트워크 끊김"이다.
+
+## 계측: 다운타임은 한 구간에 몰려 있었다
+
+추측하지 않고, 단계별로 소요 시간을 찍는 계측 로그를 넣어 측정했다. 결과:
+
+- 다운타임의 **대부분**이 "마이그레이션 성공 직후 → target 방화벽 체인 생성 완료"까지였다.
+  방화벽 체인 생성은 호스트 에이전트 호출을 포함해 수 초가 걸렸다.
+- 거기에 TAP 등장 확인 폴링이 **1초 간격**이라, TAP이 수십 ms 만에 떠도 최대 1초를 더 기다렸다.
+
+## 핵심 인사이트: idempotent한 작업은 critical path 밖으로 빼라
+
+방화벽 체인 생성에는 중요한 성질이 있었다. **이미 같은 체인이 있으면 그냥 skip**하는,
+즉 **idempotent**한 연산이라는 점이다.
+
+그렇다면 굳이 cutover 이후(= 네트워크가 끊긴 상태)에 만들 이유가 없다.
+**마이그레이션을 시작하기 전에 target 호스트에 미리 만들어두면(pre-warm)** 된다.
+cutover 직후에는 점프 규칙만 연결하면 끝난다. 이건 oVirt나 OpenStack Nova가
+네트워크 설정을 미리 준비해두는 패턴과도 일치한다.
+
+```text
+# Before — 후처리가 다운타임 안에 들어가 있음
+migrate(source → target)         # cutover (수십 ms)
+create_firewall_chains(target)   # 수 초 ── 이 동안 패킷 drop ❌
+wait_for_tap(interval = 1s)      # 최대 1s 낭비 ❌
+
+# After — idempotent 작업을 critical path 밖으로
+create_firewall_chains(target)   # 마이그레이션 전에 미리 (idempotent, 안전)
+migrate(source → target)         # cutover
+wait_for_tap(interval = 200ms)   # 첫 체크는 sleep 없이 즉시
+```
+
+## 폴링 간격도 UX다
+
+TAP 등장을 확인하는 폴링을 **1초 → 200ms**로 낮추고, 루프의 첫 번째 확인은
+sleep 없이 즉시 수행하도록 바꿨다. 사소해 보이지만, TAP이 cutover 직후 바로 등장하는
+흔한 경우에 불필요한 최대 1초 대기를 그대로 제거하는 효과가 있다.
+
+## 결과
+
+| 지표 | Before | After |
+| --- | --- | --- |
+| 네트워크 다운타임 | ~20s | **1~2s** |
+| 방화벽 체인 생성 시점 | cutover 이후 (직렬) | 마이그레이션 전 (pre-warm) |
+| TAP 폴링 간격 | 1000ms | 200ms (첫 확인 즉시) |
+
+> 수치는 개발 환경(동일 rack, 10GbE) 계측 기준이며, 운영 네트워크 조건에 따라 편차가 있을 수 있다.
+
+## 배운 점
+
+1. **순서 변경만으로 10배.** 병렬화도, 정교한 알고리즘도 없었다. idempotent한 연산을
+   critical path 밖으로 끌어낸 것만으로 체감 다운타임이 한 자릿수 초에서 1~2초가 됐다.
+2. **폴링 단위가 사용자 체감에 직결된다.** "빠른 path에서 sleep을 얼마로 잡을지"는
+   곧 사용자 다운타임이다.
+3. **"라이브" 마이그레이션의 진짜 적은 메모리 전송이 아니라 cutover 이후 후처리일 수 있다.**
+   가장 화려한 부분(iterative memory copy)이 아니라, 그 뒤에 조용히 직렬로 붙어 있던
+   네트워크 셋업이 다운타임의 대부분이었다.
+
+---
+
+> 이 기능의 사용자 관점 문서는 CloudiA 매뉴얼의
+> [Instance Migration](https://ia-cloud.gitbook.io/cloudia-manual) 항목에서 볼 수 있다.
